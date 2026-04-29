@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <!-- 구글 앱스 스크립트 웹앱은 iframe 안에서 돌아가므로 보안 차원에서 필요한 태그입니다 -->
+    <base target="_top">
+    <meta charset="UTF-8">
+    <title>이메일 요약 서비스</title>
+    
+    <!-- 화면을 꾸미는 CSS 디자인 코드 시작 -->
+    <style>
+      body {
+        font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+        background-color: #f0f2f5; /* 아주 밝은 회색 배경 */
+        color: #333;
+        padding: 20px;
+        margin: 0;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: #ffffff;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05); /* 부드러운 그림자 효과 */
+      }
+      h1 {
+        text-align: center;
+        color: #1a73e8; /* 구글 메인 블루 컬러 */
+        margin-bottom: 30px;
+      }
+      .form-group {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        gap: 15px; /* 입력칸 사이 간격 */
+      }
+      .input-field {
+        display: flex;
+        flex-direction: column;
+        flex: 1; /* 영역 반반씩 차지 */
+      }
+      label {
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #555;
+      }
+      input[type="date"] {
+        padding: 12px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 16px;
+        outline: none;
+      }
+      input[type="date"]:focus {
+        border-color: #1a73e8; /* 클릭시 파란색 테두리 */
+      }
+      button {
+        background-color: #1a73e8;
+        color: white;
+        padding: 14px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        width: 100%;
+        transition: background-color 0.2s; /* 부드러운 색 전환 */
+      }
+      button:hover {
+        background-color: #1557b0;
+      }
+      button:disabled {
+        background-color: #aaa;
+        cursor: not-allowed;
+      }
+      #loading {
+        display: none;
+        text-align: center;
+        margin: 25px 0;
+        font-weight: bold;
+        color: #1a73e8;
+        font-size: 18px;
+      }
+      
+      /* 개별 이메일 정보를 담을 카드 형태의 디자인 */
+      .email-card {
+        border: 1px solid #e0e0e0;
+        border-left: 6px solid #1a73e8; /* 왼쪽에 파란색 굵은 선 포인트 */
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        background-color: #fafafa;
+      }
+      .email-title {
+        font-size: 18px;
+        font-weight: bold;
+        margin: 0 0 10px 0;
+        color: #222;
+      }
+      .email-meta {
+        font-size: 14px;
+        color: #666;
+        margin: 0 0 15px 0;
+        padding-bottom: 10px;
+        border-bottom: 1px dashed #ccc; /* 점선 구분선 */
+      }
+      .email-summary {
+        font-size: 16px;
+        line-height: 1.6;
+        color: #333;
+        white-space: pre-wrap; /* 제공된 줄바꿈 그대로 화면에 표시하게 하는 속성 */
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 웹 페이지 화면 구성요소 -->
+    <div class="container">
+      <h1>✉️ 스마트 이메일 요약 서비스</h1>
+      
+      <!-- 날짜 입력 폼 구역 -->
+      <div class="form-group">
+        <div class="input-field">
+          <label for="startDate">조회 시작 날짜</label>
+          <input type="date" id="startDate" required>
+        </div>
+        <div class="input-field">
+          <label for="endDate">조회 종료 날짜 (포함 안됨)</label>
+          <input type="date" id="endDate" required>
+        </div>
+      </div>
+      
+      <!-- 요약 실행 버튼 -->
+      <button id="submitBtn" onclick="requestSummary()">요약하기</button>
+      
+      <!-- 요약 작동 중 표시될 안내 메시지 (기본 상태는 숨김 처리되어있음) -->
+      <div id="loading">로딩중... AI가 이메일을 번역하고 요약 중입니다 ⌛</div>
+      
+      <!-- 결과 카드가 차곡차곡 쌓일 투명한 상자 -->
+      <div id="results"></div>
+    </div>
+    <!-- 기능 제어를 위한 자바스크립트 부분 시작 -->
+    <script>
+      /**
+       * 사용자가 '요약하기' 버튼을 누르면 작동하는 함수입니다.
+       */
+      function requestSummary() {
+        // 사용자가 선택한 날짜 값을 가져옵니다.
+        var startDate = document.getElementById('startDate').value;
+        var endDate = document.getElementById('endDate').value;
+        
+        // 날짜를 선택하지 않았다면 경고창을 띄우고 함수를 멈춥니다.
+        if(!startDate || !endDate) {
+          alert('시작 날짜와 종료 날짜를 모두 선택해주세요.');
+          return;
+        }
+        // 로딩 화면을 표시하고 실수로 여러 번 누르지 못하게 버튼을 비활성화합니다.
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('results').innerHTML = ''; // 이전 결과 초기화
+        document.getElementById('submitBtn').disabled = true;
+        // Code.gs 파일 안에 있는 서버 함수(fetchAndSummarizeEmails)를 백그라운드에서 호출합니다.
+        google.script.run
+          .withSuccessHandler(displayResults) // 서버 작업 성공 시 실행할 함수 지정
+          .withFailureHandler(displayError)   // 서버 작업 실패 시 실행할 함수 지정
+          .fetchAndSummarizeEmails(startDate, endDate); // 함수 실행!
+      }
+      /**
+       * 서버에서 정상적으로 이메일 정보를 받아왔을 때, 화면에 예쁘게 그려주는 역할을 합니다.
+       * @param {Array} emails - Code.gs에서 반환한 결과값 배열
+       */
+      function displayResults(emails) {
+        // 로딩 숨기기 및 버튼 재활성화
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('submitBtn').disabled = false;
+        
+        var resultsDiv = document.getElementById('results');
+        
+        // 검색된 이메일이 있다면
+        if(emails && emails.length > 0) {
+          // 이메일 갯수만큼 아래 작업을 반복합니다.
+          emails.forEach(function(email) {
+            
+            // HTML 카드 구조(div)를 자바스크립트로 직접 만듭니다.
+            var card = document.createElement('div');
+            card.className = 'email-card'; // CSS에서 디자인한 .email-card 클래스 적용
+            
+            var title = document.createElement('h3');
+            title.className = 'email-title';
+            title.textContent = email.subject;
+            
+            var meta = document.createElement('p');
+            meta.className = 'email-meta';
+            meta.innerHTML = '<strong>보낸사람:</strong> ' + email.sender + '<br><strong>수신일시:</strong> ' + email.date;
+            
+            var summary = document.createElement('div');
+            summary.className = 'email-summary';
+            // AI가 보내온 텍스트 삽입. (HTML 태그가 포함될 수 없도록 textContent 사용)
+            summary.textContent = email.summary;
+            // 만든 요소들을 카드 안에 조립합니다.
+            card.appendChild(title);
+            card.appendChild(meta);
+            card.appendChild(summary);
+            
+            // 전부 조립된 카드를 최종 결과 영역에 덧붙입니다.
+            resultsDiv.appendChild(card);
+          });
+        } else {
+          // 검색된 이메일이 없다면 안내문구 출력
+          resultsDiv.innerHTML = '<p style="text-align:center; color:#555;">해당 기간에 검색된 이메일이 없습니다.</p>';
+        }
+      }
+      /**
+       * 오류가 발생했을 때 경고 문구를 화면에 출력하는 함수입니다.
+       */
+      function displayError(error) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('submitBtn').disabled = false;
+        
+        var resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = '<p style="color:red; text-align:center;">오류가 발생했습니다: ' + error.message + '</p>';
+      }
+    </script>
+  </body>
+</html>
